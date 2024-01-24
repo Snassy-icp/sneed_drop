@@ -1,0 +1,29 @@
+{
+  "canisters": {
+    "sneed_drop_backend": {
+      "main": "src/sneed_drop_backend/main.mo",
+      "type": "motoko"
+    },
+    "sneed_drop_frontend": {
+      "dependencies": [
+        "sneed_drop_backend"
+      ],
+      "frontend": {
+        "entrypoint": "src/sneed_drop_frontend/src/index.html"
+      },
+      "source": [
+        "src/sneed_drop_frontend/assets",
+        "dist/sneed_drop_frontend/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+      "build": {
+          "packtool": "mops sources",
+          "args": ""
+      }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
