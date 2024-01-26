@@ -176,7 +176,7 @@ actor {
 
     var i = from;
 
-    while (i <= to) {
+    while (i < to) {
       switch (transactions.get(i)) {
         case (null) { log_msg("Missing transaction. Transaction: " # Nat.toText(i)); };
         case (?tx) { index_transaction(tx, i); };
