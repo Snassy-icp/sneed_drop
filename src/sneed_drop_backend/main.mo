@@ -335,9 +335,78 @@ actor {
 
     tx_id;
   };
-  
+
+  // Move neuron balances to their owning principals
+  public shared func unstake_neuron_balances() : async () {
+
+    for (neuron in neurons.vals()) {
+
+      switch (neuron.id) {
+        case (null) { Debug.trap("Null neuron id!"); };
+        case (?id) {
+
+          // Get the principal that is the owner of this neuron
+          let neuron_owner : ?Principal = get_neuron_owner(neuron);
+
+          switch (neuron_owner) {
+            case (null) { Debug.trap("Null neuron_owner!"); };
+            case (?neuron_owner_id) {
+
+              // Construct the account identifier for the neuron
+              // by using the SNS1 governance canister as owner
+              // and by using the neuron id as the subaccount.
+              let neuron_account : Account = {
+                owner = sns1_gov_id;
+                subaccount = ?id.id;
+              };
+
+              // Find the indexed balance of the neuron at the cutoff date. 
+              let balance = get_balance(neuron_account);
+              if (balance > 0) {
+
+                // Construct the account identifier for the owner of the neuron
+                // by using the owning principal as owner and a null subaccount
+                let owner_account : Account = {
+                  owner = neuron_owner_id;
+                  subaccount = null;
+                };
+
+                // Increase the owning principal's account by the neuron's balance
+                increase_balance(owner_account, balance);
+
+                // Decrease the neuron's balance by its balance (set it to 0).
+                decrease_balance(neuron_account, balance, 0);
+
+              };
+            }
+          };
+        };
+      };
+    };
+  };
+
+  // Find the owning principal for a neuron
+  // Heuristic: Use principal with > 7 permissions if found, otherwise use any.
+  private func get_neuron_owner(neuron : Neuron) : ?Principal {
+    var found : ?Principal = null;
+    for (permission in neuron.permissions.vals()) {
+
+      found := permission.principal;
+      if (permission.permission_type.size() > 7) {
+        return found;
+      }
+    };   
+
+    found;
+  };
+
+  // Return indexed balance for the given account
+  public shared func get_indexed_balance(account : Account) : async Balance {
+    get_balance(account);
+  };
+
   // Return the indexed balances. 
-  public shared func get_balances() : async [AccountBalance] {
+  public shared func get_indexed_balances() : async [AccountBalance] {
     Array.sort(
       Iter.toArray(
         Map.mapFilter<EncodedAccount, Balance, AccountBalance>(

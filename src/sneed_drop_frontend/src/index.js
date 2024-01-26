@@ -124,6 +124,14 @@ async function countBalances() {
 
 }
 
+async function unstakeNeurons() {
+
+  div_log.innerHTML += "<br />Transfer neuron balances to owning principals...";
+  await sneed_drop_backend.unstake_neuron_balances();
+  div_log.innerHTML += "<br />Done.";
+
+}
+
 document.getElementById("btn_run_full").addEventListener("click", async (e) => {
   e.preventDefault();
   clearTransactions();
@@ -138,6 +146,7 @@ document.getElementById("btn_run_full").addEventListener("click", async (e) => {
   countNeurons();
   indexTransactions();
   countBalances();
+  unstakeNeurons();
   return false;
 });
 
@@ -192,6 +201,12 @@ document.getElementById("btn_index_tx").addEventListener("click", async (e) => {
 document.getElementById("btn_count_balances").addEventListener("click", async (e) => {
   e.preventDefault();
   countBalances();
+  return false;
+});
+
+document.getElementById("btn_unstake_neurons").addEventListener("click", async (e) => {
+  e.preventDefault();
+  unstakeNeurons();
   return false;
 });
 
