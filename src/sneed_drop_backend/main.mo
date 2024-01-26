@@ -315,20 +315,27 @@ actor {
   // "from" takes the first transaction index to start indexing from. 
   // Should normally be 0, other values only make sense during testing runs.
   // "to" takes the last transaction index to index. 
-  public shared func index_transactions(from : TxIndex, to : TxIndex) : async () {
+  public shared func index_transactions(from : TxIndex, to : TxIndex, cutoff_time : ?Nat64) : async TxIndex {
 
-    var i = from;
+    var tx_id = from;
 
-    while (i < to) {
-      switch (transactions.get(i)) {
-        case (null) { log_msg("Missing transaction. Transaction: " # Nat.toText(i)); };
-        case (?tx) { index_transaction(tx, i); };
+    while (tx_id < to) {
+      switch (transactions.get(tx_id)) {
+        case (null) { log_msg("Missing transaction. Transaction: " # Nat.toText(tx_id)); };
+        case (?tx) { 
+          if (tx_passed_cutoff_time(tx, cutoff_time)) {
+            return tx_id;
+          };
+          index_transaction(tx, tx_id); 
+        };
       };
       
-      i := i + 1;
-    }
-  };
+      tx_id := tx_id + 1;
+    };
 
+    tx_id;
+  };
+  
   // Return the indexed balances. 
   public shared func get_balances() : async [AccountBalance] {
     Array.sort(
@@ -360,6 +367,15 @@ actor {
     if (y.balance < x.balance) { #less } else if (x.balance == y.balance) { #equal } else { #greater }
   };
 
+  // Check if a transaction timestamp has passed the cutoff time
+  private func tx_passed_cutoff_time(tx : Transaction, cutoff_time : ?Nat64) : Bool {
+    switch (cutoff_time) {
+      case (null) { false; };
+      case (?cutoff) {
+        tx.timestamp > cutoff;
+      };
+    }
+  };
 
   // Index a transaction.
   private func index_transaction(tx : Transaction, i : TxIndex) : () {

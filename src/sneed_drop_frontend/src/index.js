@@ -1,5 +1,31 @@
 import { sneed_drop_backend } from "../../declarations/sneed_drop_backend";
 
+let div_log = document.getElementById("div_log");
+
+async function clearTransactions() {
+
+  div_log.innerHTML += "<br />Deleting all imported transactions from memory...";
+  var check = await sneed_drop_backend.clear_imported_transactions();
+  div_log.innerHTML += "<br />Done.";
+
+}
+
+async function clearNeurons() {
+
+  div_log.innerHTML += "<br />Deleting all imported neurons from memory...";
+  var check = await sneed_drop_backend.clear_imported_neurons();
+  div_log.innerHTML += "<br />Done.";
+
+}
+
+async function clearBalances() {
+
+  div_log.innerHTML += "<br />Deleting all indexed balances from memory...";
+  var check = await sneed_drop_backend.clear_indexed_balances();
+  div_log.innerHTML += "<br />Done.";
+
+}
+
 async function importTransactions() {
 
   var from = 0;
@@ -7,7 +33,6 @@ async function importTransactions() {
   var batch_inner = 1000;
   var max = 30000; //300000; // Get the 300,000 first transactions.
 
-  let div_log = document.getElementById("div_log");
   var last_id = 0;
 
   while (from < max) {
@@ -39,8 +64,6 @@ async function importNeurons() {
   var max = 12000;
   var stop = false;
 
-  let div_log = document.getElementById("div_log");
-
   while (cnt_imported < max && !stop) {
 
     div_log.innerHTML += "<br />Importing neurons " + cnt_imported + " - " + (cnt_imported + batch_outer) + "...";
@@ -54,21 +77,7 @@ async function importNeurons() {
 
   }
 
-  div_log.innerHTML += "<br />Done importing up to " + cnt_imported + " neurons.";
-
-  div_log.innerHTML += "<br />Double check count of imported neurons...";
-  var check = await sneed_drop_backend.imported_neurons_count();
-  div_log.innerHTML += "<br />Imported neurons in memory: " + check;
-
-  var match = check == cnt_imported;
-
-  if (match) {
-    div_log.innerHTML += "<br />Match! Continuing process.";
-  } else {
-    div_log.innerHTML += "<br />Mismatch! Exiting process!";
-  }
-
-  return match;
+  div_log.innerHTML += "<br />Done.";
 
 }
 
@@ -80,12 +89,73 @@ async function countNeurons() {
 
 }
 
+async function indexTransactions() {
+
+  var i = 0;
+  var batch_outer = 100000;
+  var max = 300000;
+  var stop = false;
+  var last_id = 0;
+  var cutoff = [];
+
+  cutoff [0] = BigInt(new Date(document.getElementById("txt_cutoff").value).valueOf() + '000000');
+
+  while (i < max && !stop) {
+ 
+    div_log.innerHTML += "<br />Indexing transactions " + i + " - " + (i + batch_outer) + "...";
+    last_id = await sneed_drop_backend.index_transactions(i, i + batch_outer, cutoff);
+    i += batch_outer;
+ 
+    if (last_id < i) {
+      stop = true;
+    }
+ 
+  }
+
+  div_log.innerHTML += "<br />Done indexing " + last_id + " transactions.";
+
+}
+
+async function countBalances() {
+
+  div_log.innerHTML += "<br />Checking current number of indexed account balances...";
+  var check = await sneed_drop_backend.indexed_balances_count();
+  div_log.innerHTML += "<br />There are currently: " + check + " indexed account balances in memory.";
+
+}
+
 document.getElementById("btn_run_full").addEventListener("click", async (e) => {
   e.preventDefault();
+  clearTransactions();
+  countTransactions();
+  clearNeurons();
+  countNeurons();
+  clearBalances();
+  countBalances();
   importTransactions();
   countTransactions();
   importNeurons();
   countNeurons();
+  indexTransactions();
+  countBalances();
+  return false;
+});
+
+document.getElementById("btn_clear_tx").addEventListener("click", async (e) => {
+  e.preventDefault();
+  clearTransactions();
+  return false;
+});
+
+document.getElementById("btn_clear_neurons").addEventListener("click", async (e) => {
+  e.preventDefault();
+  clearNeurons();
+  return false;
+});
+
+document.getElementById("btn_clear_balances").addEventListener("click", async (e) => {
+  e.preventDefault();
+  clearBalances();
   return false;
 });
 
@@ -110,6 +180,18 @@ document.getElementById("btn_import_neurons").addEventListener("click", async (e
 document.getElementById("btn_count_neurons").addEventListener("click", async (e) => {
   e.preventDefault();
   countNeurons();
+  return false;
+});
+
+document.getElementById("btn_index_tx").addEventListener("click", async (e) => {
+  e.preventDefault();
+  indexTransactions();
+  return false;
+});
+
+document.getElementById("btn_count_balances").addEventListener("click", async (e) => {
+  e.preventDefault();
+  countBalances();
   return false;
 });
 
