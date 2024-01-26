@@ -54,10 +54,13 @@ actor {
   // during canister upgrades so it is not destroyed.
   
   // Imported transactions (stable)
-  stable var stable_transactions : [(TxIndex, Transaction)]= []; 
+  stable var stable_transactions : [(TxIndex, Transaction)] = []; 
 
   // Indexed account balances (stable)
-  stable var stable_balances : [(EncodedAccount, Balance)]= [];
+  stable var stable_balances : [(EncodedAccount, Balance)] = [];
+
+  // Log messages (stable)
+  stable var stable_log : [Text] = [];
 
   // Transient state variables (the state in these do not survive canister upgrades)
   // On canister startup the state for these transient variables will be read from the 
@@ -70,7 +73,7 @@ actor {
   var balances = Map.fromIter<EncodedAccount, Nat>(stable_balances.vals(), 10, Blob.equal, Blob.hash);
 
   // Log messages  
-  var log : Log = Buffer.Buffer<Text>(10);
+  var log : Log = Buffer.fromArray<Text>(stable_log);
 
   // Constant state
 
@@ -100,6 +103,7 @@ actor {
     // stashing it away so it survives the canister upgrade.
     stable_transactions := Iter.toArray(transactions.entries());
     stable_balances := Iter.toArray(balances.entries());
+    stable_log := Buffer.toArray(log);
 
   };
 
@@ -110,6 +114,7 @@ actor {
     // Clear persistent state (stashed away transient state) after upgrading the canister
     stable_transactions := [];
     stable_balances := [];
+    stable_log := [];
 
   };
 
