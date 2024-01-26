@@ -144,7 +144,7 @@ actor {
   // "batch_size" specifies how many transactions to ask for per call to the SNS1 archive canister.
   // NB: This code currently only supports one archive canister.
   // TODO: Add support for multiple archive canisters (but not needed for NTN -> SNS1 airdrop)
-  public shared func import_transactions(from : TxIndex, to : TxIndex, batch_size: Nat) : async () {
+  public shared func import_transactions(from : TxIndex, to : TxIndex, batch_size: Nat) : async Nat {
 
     // Make sure the "to" parameter contains a greater transaction index than the "from" parameter.
     assert to > from;
@@ -153,7 +153,7 @@ actor {
     var curr = from;
 
     // We keep iterating until we reach the index specified in the "to" parameter.
-    while (curr <= to) {
+    while (curr < to) {
 
       // Call the SNS1 archive canister, asking for the transactions starting at our current index.      
       let result = await sns1_archive.get_transactions({ start = curr; length = batch_size; });
@@ -169,8 +169,18 @@ actor {
 
       // Increase the current transaction index by the batch size.
       curr := curr + batch_size;
+
+      // If we did not get a full page back, exit the function 
+      // returning the index after the last transaction we imported. 
+      if (i < curr) {
+        return i;
+      };
+
     };
-    
+
+    // return the index after the last imported transaction.
+    return curr;
+
   };
 
   // Index imported transactions, determining account balances.
