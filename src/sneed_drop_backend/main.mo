@@ -3,6 +3,7 @@ import Iter "mo:base/Iter";
 import Int "mo:base/Int";
 import Nat "mo:base/Nat";
 import Nat8 "mo:base/Nat8";
+import Nat32 "mo:base/Nat32";
 import Hash "mo:base/Hash";
 import Map "mo:base/HashMap";
 import Principal "mo:base/Principal";
@@ -19,6 +20,9 @@ actor {
   public type EncodedAccount = Blob;
   public type Balance = Nat;
   public type Log = Buffer.Buffer<Text>;
+  public type NeuronId = { id : Blob };
+  public type Followees = { followees : [NeuronId] };
+  public type ListNeuronsResponse = { neurons : [Neuron] };
 
   public type AccountBalance = {
     account : Account;
@@ -49,12 +53,57 @@ actor {
     };
   };
 
+  public type ListNeurons = {
+    of_principal : ?Principal;
+    limit : Nat32;
+    start_page_at : ?NeuronId;
+  };
+
+  public type Neuron = {
+    id : ?NeuronId;
+    staked_maturity_e8s_equivalent : ?Nat64;
+    permissions : [NeuronPermission];
+    maturity_e8s_equivalent : Nat64;
+    cached_neuron_stake_e8s : Nat64;
+    created_timestamp_seconds : Nat64;
+    source_nns_neuron_id : ?Nat64;
+    auto_stake_maturity : ?Bool;
+    aging_since_timestamp_seconds : Nat64;
+    dissolve_state : ?DissolveState;
+    voting_power_percentage_multiplier : Nat64;
+    vesting_period_seconds : ?Nat64;
+    disburse_maturity_in_progress : [DisburseMaturityInProgress];
+    followees : [(Nat64, Followees)];
+    neuron_fees_e8s : Nat64;
+  };
+
+  public type NeuronPermission = {
+    principal : ?Principal;
+    permission_type : [Int32];
+  };
+
+  public type DissolveState = {
+    #DissolveDelaySeconds : Nat64;
+    #WhenDissolvedTimestampSeconds : Nat64;
+  };
+
+  public type DisburseMaturityInProgress = {
+    timestamp_of_disbursement_seconds : Nat64;
+    amount_e8s : Nat64;
+    account_to_disburse_to : ?Account;
+    finalize_disbursement_timestamp_seconds : ?Nat64;
+  };
+
+
   // Persistent state variables (the state in these survive canister upgrades)
   // These variables are used to stash away state from transient state variables 
   // during canister upgrades so it is not destroyed.
   
   // Imported transactions (stable)
   stable var stable_transactions : [(TxIndex, Transaction)] = []; 
+
+  // Imported neurons (stable)
+  stable var stable_neurons : [(Blob, Neuron)]= [];
 
   // Indexed account balances (stable)
   stable var stable_balances : [(EncodedAccount, Balance)] = [];
@@ -69,6 +118,9 @@ actor {
   // Imported transactions
   var transactions = Map.fromIter<TxIndex, Transaction>(stable_transactions.vals(), 100, Int.equal, Hash.hash);
 
+  // Imported neurons
+  var neurons = Map.fromIter<Blob, Neuron>(stable_neurons.vals(), 100, Blob.equal, Blob.hash);
+
   // Indexed account balances
   var balances = Map.fromIter<EncodedAccount, Nat>(stable_balances.vals(), 10, Blob.equal, Blob.hash);
 
@@ -77,11 +129,8 @@ actor {
 
   // Constant state
 
-  // The SNS1 Swap canister's principal
-  let sns1_swap = Principal.fromText("zcdfx-6iaaa-aaaaq-aaagq-cai");
-
-  // The SNS1 Governance canister's principal
-  let sns1_gov = Principal.fromText("zqfso-syaaa-aaaaq-aaafq-cai");
+  // The SNS1 Governance canister's principal id
+  let sns1_gov_id = Principal.fromText("zqfso-syaaa-aaaaq-aaafq-cai");
 
   // The SNS1 archive canister, with its get_transactions method 
   // that we will call to import transactions.
@@ -89,6 +138,12 @@ actor {
     get_transactions : shared query { start : Nat; length : Nat } -> async {
         transactions : [Transaction];
       };
+  };  
+
+  // The SNS1 governance canister, with its list_neurons method
+  // that we call to import the neurons.
+  let sns1_gov = actor ("zqfso-syaaa-aaaaq-aaafq-cai") : actor {
+    list_neurons : shared query ListNeurons -> async ListNeuronsResponse;
   };  
 
   // The SNS1 transaction fee 
@@ -102,6 +157,7 @@ actor {
     // Move transient state into persistent state before upgrading the canister,
     // stashing it away so it survives the canister upgrade.
     stable_transactions := Iter.toArray(transactions.entries());
+    stable_neurons := Iter.toArray(neurons.entries());
     stable_balances := Iter.toArray(balances.entries());
     stable_log := Buffer.toArray(log);
 
@@ -113,6 +169,7 @@ actor {
 
     // Clear persistent state (stashed away transient state) after upgrading the canister
     stable_transactions := [];
+    stable_neurons := [];
     stable_balances := [];
     stable_log := [];
 
@@ -123,14 +180,20 @@ actor {
   // Returns the number of imported transactions
   public shared func imported_transactions_count() : async Nat { transactions.size(); };
 
+  // Returns the number of imported neurons
+  public shared func imported_neurons_count() : async Nat { neurons.size(); };
+
   // Returns the number of indexed balances
   public shared func indexed_balances_count() : async Nat { balances.size(); };
 
   // Clears all imported transactions
-  public shared func clear_imported() : async () { for (key in transactions.keys()) { transactions.delete(key); }; };
+  public shared func clear_imported_transactions() : async () { for (key in transactions.keys()) { transactions.delete(key); }; };
+
+  // Clears all imported neurons
+  public shared func clear_imported_neurons() : async () { for (key in neurons.keys()) { neurons.delete(key); }; };
 
   // Clears all indexed balances
-  public shared func clear_balances() : async () { for (key in balances.keys()) { balances.delete(key); }; };
+  public shared func clear_indexed_balances() : async () { for (key in balances.keys()) { balances.delete(key); }; };
 
   // Clear log
   public shared func clear_log() : async () { log.clear(); };
@@ -183,6 +246,71 @@ actor {
 
   };
 
+
+  // Import neurons from SNS1 governance canister and store them in local state variables.
+  // "start_neuron_id" takes the neuron id of the first neuron to start importing from.
+  // "max" takes the maximum number of neurons to import in this call to the function.
+  // "batch_size" specifies how many neurons to ask for per call to the SNS1 governance canister.
+  public shared func import_neurons(start_neuron_id : ?NeuronId, max : Nat32, batch_size : Nat32) : async ?NeuronId {
+
+    // Variable to hold the neuron id of the last imported neuron
+    var last : ?NeuronId = null;
+
+    // Variable to hold the neuron id to import from in each call to the SNS1 governance canister. 
+    var curr : ?NeuronId = start_neuron_id;
+
+    // Variable to track hom many neurons have been imported in this call to the function. 
+    var cnt : Nat32 = 0;
+
+    // Flag to indicate if the last batch returned from the SNS1 governance canister was 
+    // smaller than the requested batch size, indicating we've reached the end of the list and should stop.
+    var stop = false;
+
+    // Fetch neurons in batches until we reach the max number of neurons to import or until 
+    // the SNS1 governance canister returns a batch smaller than the requested batch size. 
+    while (cnt < max and stop == false) {
+
+      // Call the SNS1 governance canister's list_neurons method.
+      let result = await sns1_gov.list_neurons({ 
+        of_principal = null;
+        limit = batch_size;
+        start_page_at = curr; 
+      });
+
+      // Iterate over the batch of neurons returned by the SNS1 governance canister.
+      for (neuron in result.neurons.vals()) {      
+
+        // Ensure the neuron has an id.
+        switch (neuron.id) {
+          case (null) { Debug.trap("Null neuron id!"); };
+          case (?id) {
+
+            // Store the neuron in the HashMap using its id as key.
+            neurons.put(id.id, neuron);
+
+            // Store away the neuron id in the curr and last variables.
+            curr := neuron.id;
+            last := neuron.id;
+          };
+        };
+      };
+
+      // If the last batch returned from the SNS1 governance canister was smaller than the requested 
+      // batch size, raise stop flag to indicate we've reached the end of the list and should stop.
+      if (Nat32.fromNat(result.neurons.size()) < batch_size) {
+        stop := true;
+      };
+ 
+      // Increase the count of how many neurons we have imported by the batch size.
+      cnt := cnt + batch_size;
+
+    };
+
+    // Return the neuron id of the last imported neuron.
+    last;    
+
+  };
+
   // Index imported transactions, determining account balances.
   // "from" takes the first transaction index to start indexing from. 
   // Should normally be 0, other values only make sense during testing runs.
@@ -216,7 +344,7 @@ actor {
             switch (account) {
               case (null) { return null; };
               case (?acct) {
-                if (acct.owner == sns1_gov) { return null; };
+                if (acct.owner == sns1_gov_id) { return null; };
 
                 return ?{ 
                   account = acct; 
