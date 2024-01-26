@@ -431,6 +431,19 @@ actor {
           }).vals()), compareAccountBalancesDesc);
   };
 
+
+  public shared func count_indexed_balances_total() : async Nat {
+
+    var total : Nat = 0;
+
+    for (balance in balances.vals()) {
+      total := total + balance;
+    };
+
+    total;
+
+  };
+
   // Compare two AccountBalances for a descending sort.
   private func compareAccountBalancesDesc(x : AccountBalance, y : AccountBalance) : { #less; #equal; #greater } {
     if (y.balance < x.balance) { #less } else if (x.balance == y.balance) { #equal } else { #greater }

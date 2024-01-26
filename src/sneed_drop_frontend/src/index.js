@@ -1,6 +1,54 @@
 import { sneed_drop_backend } from "../../declarations/sneed_drop_backend";
+import { Principal } from "@dfinity/principal";
 
 let div_log = document.getElementById("div_log");
+
+
+function getSubaccount() {
+  var result = new Uint8Array(32);
+  var arr_sub = new Uint8Array(32);
+  var cnt = 0;
+
+  var st_sub = document.getElementById("txt_subaccount").value.toString();
+
+  if (st_sub && st_sub.length > 0) {
+    if (st_sub.indexOf(',') < 0) { st_sub += ','; }
+    var arr = st_sub.split(',');
+
+    for (var i = 0; i < arr.length; i++) {
+      var st_val = arr[i];
+      if (st_val) {
+
+        st_val = st_val.trim();
+
+        if (st_val.length > 0) {
+
+          var i_val = parseInt(st_val);
+
+          if (i_val) {
+            if (i_val >= 0 && i_val <= 255) {
+              arr_sub[cnt++] = i_val;
+              if (cnt >= 32) {
+                alert("Subaccount values out of range: A maximum of 32 values between 0 and 255 is allowed as a comma separated list."); 
+                return -1; 
+                //break;
+              }
+            } else { alert("Subaccount value out of range: " + i_val + ". Values must be between 0 and 255."); return -1; }
+          }  
+        }
+      }
+    }
+
+    if (cnt > 0) { result = arr_sub; }
+
+  }
+
+  var sub = []; 
+  sub[0] = arr_sub; 
+  result = sub;
+
+  return result;
+}
 
 async function clearTransactions() {
 
@@ -23,6 +71,23 @@ async function clearBalances() {
   div_log.innerHTML += "<br />Deleting all indexed balances from memory...";
   var check = await sneed_drop_backend.clear_indexed_balances();
   div_log.innerHTML += "<br />Done.";
+
+}
+
+async function clearErrorLog() {
+
+  div_log.innerHTML += "<br />Deleting error log from memory...";
+  var check = await sneed_drop_backend.clear_log();
+  div_log.innerHTML += "<br />Done.";
+
+}
+
+async function getThenClearErrorLog() {
+
+  var cnt_errors = await getErrorLog();
+  if (cnt_errors > 0) {
+    clearErrorLog();
+  };
 
 }
 
@@ -132,6 +197,70 @@ async function unstakeNeurons() {
 
 }
 
+async function countBalancesTotal() {
+
+  div_log.innerHTML += "<br />Checking current total supply for indexed account balances...";
+  var check = await sneed_drop_backend.count_indexed_balances_total();
+  div_log.innerHTML += "<br />Current total supply for indexed balances: " + check;
+
+}
+
+async function getErrorLog() {
+
+  div_log.innerHTML += "<br />Getting current error log...";
+  var log = await sneed_drop_backend.get_log();
+  var i = 0;
+  for (i = 0; i < log.length; i++) {
+    div_log.innerHTML += "<br />" + log[i];
+  }
+
+  div_log.innerHTML += "<br />Done, with " + i + " items in error log.";
+
+  return i;
+
+}
+
+async function getIndexedBalances() {
+
+  div_log.innerHTML += "<br />Getting indexed balances...";
+  var balances = await sneed_drop_backend.get_indexed_balances();
+  var i = 0;
+  for (i = 0; i < balances.length; i++) {
+    let balance = balances[i];
+    let bal = balance.account.owner + ', \"' + balance.account.subaccount + '\", ' + balance.balance; 
+    div_log.innerHTML += "<br />" + bal;
+  }
+
+  div_log.innerHTML += "<br />Done.";
+
+  return i;
+
+}
+
+async function getIndexedBalance() {
+
+  let owner = document.getElementById("txt_owner").value;
+  const subaccount = getSubaccount(); 
+  if (subaccount && subaccount < 1) {
+    return false;
+  }
+  
+  let account = {
+    "owner" : Principal.fromText(owner),
+    "subaccount" : subaccount
+  };
+
+  var sub = "";
+  if (subaccount) {
+    sub = ", subaccount: " + subaccount;
+  }
+
+  div_log.innerHTML += "<br />Getting indexed balance for " + owner + sub + "...";
+  var balance = await sneed_drop_backend.get_indexed_balance(account);
+  div_log.innerHTML += "<br />Indexed balance for " + owner + sub + ": " + balance;
+
+}
+
 document.getElementById("btn_run_full").addEventListener("click", async (e) => {
   e.preventDefault();
   clearTransactions();
@@ -140,13 +269,19 @@ document.getElementById("btn_run_full").addEventListener("click", async (e) => {
   countNeurons();
   clearBalances();
   countBalances();
+  clearErrorLog();
   importTransactions();
   countTransactions();
   importNeurons();
   countNeurons();
   indexTransactions();
+  getThenClearErrorLog();
   countBalances();
+  countBalancesTotal();
   unstakeNeurons();
+  getThenClearErrorLog();
+  countBalancesTotal();
+  getIndexedBalances();
   return false;
 });
 
@@ -165,6 +300,12 @@ document.getElementById("btn_clear_neurons").addEventListener("click", async (e)
 document.getElementById("btn_clear_balances").addEventListener("click", async (e) => {
   e.preventDefault();
   clearBalances();
+  return false;
+});
+
+document.getElementById("btn_clear_errors").addEventListener("click", async (e) => {
+  e.preventDefault();
+  clearErrorLog();
   return false;
 });
 
@@ -207,6 +348,30 @@ document.getElementById("btn_count_balances").addEventListener("click", async (e
 document.getElementById("btn_unstake_neurons").addEventListener("click", async (e) => {
   e.preventDefault();
   unstakeNeurons();
+  return false;
+});
+
+document.getElementById("btn_total_balance").addEventListener("click", async (e) => {
+  e.preventDefault();
+  countBalancesTotal();
+  return false;
+});
+
+document.getElementById("btn_get_errors").addEventListener("click", async (e) => {
+  e.preventDefault();
+  getErrorLog();
+  return false;
+});
+
+document.getElementById("btn_get_balances").addEventListener("click", async (e) => {
+  e.preventDefault();
+  getIndexedBalances();
+  return false;
+});
+
+document.getElementById("btn_get_balance").addEventListener("click", async (e) => {
+  e.preventDefault();
+  getIndexedBalance();
   return false;
 });
 
