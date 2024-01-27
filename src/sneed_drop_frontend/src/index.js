@@ -263,25 +263,25 @@ async function getIndexedBalance() {
 
 document.getElementById("btn_run_full").addEventListener("click", async (e) => {
   e.preventDefault();
-  clearTransactions();
-  countTransactions();
-  clearNeurons();
-  countNeurons();
-  clearBalances();
-  countBalances();
-  clearErrorLog();
-  importTransactions();
-  countTransactions();
-  importNeurons();
-  countNeurons();
-  indexTransactions();
-  getThenClearErrorLog();
-  countBalances();
-  countBalancesTotal();
-  unstakeNeurons();
-  getThenClearErrorLog();
-  countBalancesTotal();
-  getIndexedBalances();
+  await clearTransactions();
+  await countTransactions();
+  await clearNeurons();
+  await countNeurons();
+  await clearBalances();
+  await countBalances();
+  await clearErrorLog();
+  await importTransactions();
+  await countTransactions();
+  await importNeurons();
+  await countNeurons();
+  await indexTransactions();
+  await getThenClearErrorLog();
+  await countBalances();
+  await countBalancesTotal();
+  await unstakeNeurons();
+  await getThenClearErrorLog();
+  await countBalancesTotal();
+  await getIndexedBalances();
   return false;
 });
 
