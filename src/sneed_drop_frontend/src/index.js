@@ -96,7 +96,7 @@ async function importTransactions() {
   var from = 0;
   var batch_outer = 10000;
   var batch_inner = 1000;
-  var max = 30000; //300000; // Get the 300,000 first transactions.
+  var max = 300000; // Get the 300,000 first transactions.
 
   var last_id = 0;
 
